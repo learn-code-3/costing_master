@@ -35,6 +35,7 @@ class LoginScreen extends ConsumerWidget {
       children: [
         Scaffold(
           extendBodyBehindAppBar: true,
+          backgroundColor: Colors.white,
           body: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(

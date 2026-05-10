@@ -76,14 +76,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               height: 200,
             ),
             SizedBox(height: 20),
-            Text(
-              "Costing Master",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.deepPurple,
-              ),
-            ),
           ],
         ),
       ),
