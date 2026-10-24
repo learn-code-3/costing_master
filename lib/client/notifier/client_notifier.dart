@@ -3,34 +3,37 @@ import 'package:costing_master/client/repository/client_repository.dart';
 import 'package:costing_master/model/client.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class ClientNotifier extends AsyncNotifier<List<Client>> {
-  late final ClientRepository _clientRepository;
+class DuplicateClientException implements Exception {
+  final String name;
+  const DuplicateClientException(this.name);
+}
 
+class ClientNotifier extends AsyncNotifier<List<Client>> {
   @override
   Future<List<Client>> build() async {
-    _clientRepository = ref.read(clientRepositoryProvider);
-    state = const AsyncLoading();
-    return await getClients();
+    final user = await ref.watch(authProvider.future);
+    if (user == null) return const [];
+    final clients =
+        await ref.read(clientRepositoryProvider).getUserClients(user.uid);
+    return clients..sort(_byName);
   }
 
-  Future<bool> createClient(Client client) async {
-    final bool isClientCreated = await _clientRepository.createClient(client);
-    return isClientCreated;
+  /// Adds a client; throws [DuplicateClientException] if the name exists.
+  Future<Client> createClient(String name) async {
+    final trimmed = name.trim();
+    final current = state.value ?? const <Client>[];
+    if (current.any((c) => c.name.toLowerCase() == trimmed.toLowerCase())) {
+      throw DuplicateClientException(trimmed);
+    }
+    final user = (await ref.read(authProvider.future))!;
+    final client = Client(name: trimmed, createdBy: user.uid);
+    await ref.read(clientRepositoryProvider).createClient(client);
+    state = AsyncData([...current, client]..sort(_byName));
+    return client;
   }
 
-  Future<List<Client>> getClients() async {
-    final loggedInUserUid = (await ref.read(authProvider.future))!.uid;
-    final List<Client> clients =
-        await _clientRepository.getUserClients(loggedInUserUid);
-
-    return clients;
-  }
-
-  Future<void> refresh() async {
-    state = const AsyncLoading();
-    List<Client> clients = await getClients();
-    state = AsyncValue.data(clients);
-  }
+  static int _byName(Client a, Client b) =>
+      a.name.toLowerCase().compareTo(b.name.toLowerCase());
 }
 
 final clientsProvider =

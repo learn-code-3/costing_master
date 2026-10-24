@@ -40,7 +40,8 @@ class Client {
   }
 
   @override
-  String toString() => 'Client(name: $name, guid: $guid, createdBy: $createdBy)';
+  String toString() =>
+      'Client(name: $name, guid: $guid, createdBy: $createdBy)';
 
   @override
   bool operator ==(covariant Client other) {
