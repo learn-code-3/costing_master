@@ -48,3 +48,7 @@ flutter build appbundle --obfuscate --split-debug-info=build/symbols
 
 Launcher icons are rendered from `lib/widgets/brand_mark.dart` into
 `assets/icon/`. Regenerate the platform icons with `dart run flutter_launcher_icons`.
+
+## Toolchain versions
+
+See [VERSIONS.md](VERSIONS.md) for the exact Flutter, Java, Gradle, AGP and Kotlin versions this project builds with.
