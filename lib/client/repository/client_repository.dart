@@ -14,38 +14,15 @@ class ClientRepository {
   ClientRepository({required FirebaseFirestore firestore})
       : _firestore = firestore;
 
-  Future<bool> createClient(Client client) async {
-    try {
-      final clientDoc = await _clients.doc(client.guid).get();
-      if (clientDoc.exists) {
-        throw 'Client with the same name already exists!';
-      }
-      await _clients.doc(client.guid).set(client.toMap());
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
+  CollectionReference<Map<String, dynamic>> get _clients =>
+      _firestore.collection(FirebaseConstants.clientsCollection);
+
+  Future<void> createClient(Client client) =>
+      _clients.doc(client.guid).set(client.toMap());
 
   Future<List<Client>> getUserClients(String createdByUid) async {
-    final Stream<List<Client>> clientsStream = _clients
-        .where('createdBy', isEqualTo: createdByUid)
-        .snapshots()
-        .map((event) {
-      List<Client> clients = [];
-      for (var doc in event.docs) {
-        clients.add(
-          Client.fromMap(doc.data() as Map<String, dynamic>),
-        );
-      }
-      return clients;
-    });
-
-    List<Client> clients = await clientsStream.first;
-
-    return clients;
+    final snapshot =
+        await _clients.where('createdBy', isEqualTo: createdByUid).get();
+    return [for (final doc in snapshot.docs) Client.fromMap(doc.data())];
   }
-
-  CollectionReference get _clients =>
-      _firestore.collection(FirebaseConstants.clientsCollection);
 }

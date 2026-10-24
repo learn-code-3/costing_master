@@ -1,113 +1,105 @@
 import 'package:costing_master/auth/notifiers/auth_notifier.dart';
-import 'package:costing_master/client/screen/client_listing.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:costing_master/auth/screens/sign_in_button.dart';
+import 'package:costing_master/client/screen/client_listing.dart';
+import 'package:costing_master/theme/app_theme.dart';
+import 'package:costing_master/widgets/app_snack.dart';
+import 'package:costing_master/widgets/brand_mark.dart';
+import 'package:costing_master/widgets/entrance.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class LoginScreen extends ConsumerWidget {
   const LoginScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final size = MediaQuery.of(context).size;
-    final textTheme = Theme.of(context).textTheme;
-     final authState = ref.watch(authProvider);
-     final isLoading = authState.isLoading;
-     
-     authState.when(
-      data: (user) {
-        if (user != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const ClientListing(),
-              ),
-            );
-          });
-        }
-      },
-      loading: () {},
-      error: (_, __) {},
-    );
-    return Stack(
-      children: [
-        Scaffold(
-          extendBodyBehindAppBar: true,
-          backgroundColor: Colors.white,
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  colorScheme.surface,
-                  colorScheme.primaryContainer.withOpacity(0.4),
-                  colorScheme.secondaryContainer.withOpacity(0.3),
-                ],
-                stops: const [0.0, 0.5, 1.0],
-              ),
-            ),
-            child: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 24.0,
-                    vertical: size.height * 0.06,
-                  ),
+    ref.listen(authProvider, (previous, next) {
+      switch (next) {
+        case AsyncData(value: _?):
+          Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const ClientListing()));
+        case AsyncError():
+          showAppSnack(
+              context, 'સાઇન ઇન ન થયું, ફરી પ્રયત્ન કરો · Sign-in failed',
+              type: SnackType.error);
+        default:
+      }
+    });
+
+    const features = [
+      (Icons.diamond_outlined, 'ડાયમંડ, સગડી, મજૂરી – એક જ સ્ક્રીન પર'),
+      (Icons.bolt_rounded, 'ટાઇપ કરતાં જ અંતિમ ભાવ તૈયાર'),
+      (Icons.share_rounded, 'તમારા બિઝનેસના નામ સાથે WhatsApp પર શેર'),
+    ];
+
+    return Scaffold(
+      body: DecoratedBox(
+        decoration: BoxDecoration(gradient: context.brand.heroGradient),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // App Icon Section with Enhanced Shadow and Glow
-                      Hero(
-                        tag: 'app_logo',
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          child: Image.asset(
-                            'assets/icon/icon.png',
-                            width: 120,
-                            height: 120,
-                            fit: BoxFit.contain,
+                      const Column(
+                        children: [
+                          SizedBox(height: 24),
+                          Hero(tag: 'brand-mark', child: BrandMark(size: 112)),
+                          SizedBox(height: 20),
+                          BrandWordmark(color: Colors.white),
+                          SizedBox(height: 12),
+                          Text(
+                            'સાડીની કોસ્ટિંગ સેકન્ડમાં',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Welcome to',
-                        textAlign: TextAlign.center,
-                        style: textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w500,
-                          color: colorScheme.onSurface.withOpacity(0.8),
-                          letterSpacing: 1.0,
-                        ),
+                      const SizedBox(height: 32),
+                      Column(
+                        children: [
+                          for (final (i, (icon, text)) in features.indexed)
+                            Entrance(
+                              index: i + 2,
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 14),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(icon,
+                                          color: context.brand.gold, size: 20),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Text(
+                                        text,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 24),
+                          const SignInButton(),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Costing Master',
-                        textAlign: TextAlign.center,
-                        style: textTheme.headlineLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onSurface,
-                          height: 1.2,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      
-                      
-                      // Sign In Button Container with Card Effect
-                      Container(
-                        width: double.infinity,
-                        constraints: const BoxConstraints(maxWidth: 400),
-                        padding: const EdgeInsets.all(16),
-                        child: const SignInButton(),
-                      ),
-                      
-                      // Additional Spacing
-                      SizedBox(height: size.height * 0.05),
                     ],
                   ),
                 ),
@@ -115,49 +107,7 @@ class LoginScreen extends ConsumerWidget {
             ),
           ),
         ),
-        // Loading overlay
-        if (isLoading)
-          Container(
-            color: Colors.black.withOpacity(0.5),
-            child: Center(
-              child: Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'Signing in with Google...',
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: colorScheme.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Please wait while we authenticate your account',
-                        textAlign: TextAlign.center,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withOpacity(0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
+      ),
     );
   }
 }
