@@ -41,9 +41,9 @@ Future<void> main() async {
 
 const _settings = AppSettings(
   profile: BusinessProfile(
-    businessName: 'શ્રી કૃષ્ણ એમ્બ્રોઇડરી',
-    ownerName: 'મહેશભાઈ પટેલ',
-    phone: '98250 12345',
+    businessName: 'શ્રી રામ ફેશન',
+    ownerName: 'અમિત વસાણી',
+    phone: '95371 74465',
     city: 'સુરત',
     tagline: 'હેન્ડવર્ક અને ડાયમંડ વર્ક સ્પેશિયાલિસ્ટ',
   ),
