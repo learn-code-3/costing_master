@@ -38,15 +38,13 @@ class _SectionCardState extends ConsumerState<SectionCard> {
     final active = subtotal != 0;
     final duration = Motion.of(context, Motion.medium);
 
-    return AnimatedContainer(
-      duration: duration,
-      curve: Motion.emphasized,
+    return Container(
       decoration: BoxDecoration(
         color: context.colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: active
-              ? context.brand.gold.withValues(alpha: 0.7)
+              ? context.colors.primary.withValues(alpha: 0.6)
               : context.colors.outlineVariant.withValues(alpha: 0.5),
           width: active ? 1.4 : 1,
         ),
@@ -60,22 +58,20 @@ class _SectionCardState extends ConsumerState<SectionCard> {
               padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
               child: Row(
                 children: [
-                  AnimatedContainer(
-                    duration: duration,
+                  Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: active
-                          ? context.brand.goldSoft
-                          : context.colors.primaryContainer
-                              .withValues(alpha: 0.6),
+                          ? context.colors.primaryContainer
+                          : context.colors.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       widget.icon,
                       size: 20,
                       color: active
-                          ? context.brand.onGold
-                          : context.colors.onPrimaryContainer,
+                          ? context.colors.onPrimaryContainer
+                          : context.colors.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -98,6 +94,7 @@ class _SectionCardState extends ConsumerState<SectionCard> {
                   ),
                   AnimatedAmount(
                     subtotal,
+                    animate: false,
                     style: context.text.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: active

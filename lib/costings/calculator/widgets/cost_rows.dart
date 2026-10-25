@@ -5,7 +5,6 @@ import 'package:costing_master/domain/costing_calculator.dart';
 import 'package:costing_master/domain/labels.dart';
 import 'package:costing_master/domain/money.dart';
 import 'package:costing_master/theme/app_theme.dart';
-import 'package:costing_master/theme/motion.dart';
 import 'package:costing_master/widgets/animated_amount.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,13 +28,12 @@ class _RowShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final value = ref.watch(draft.select(amount));
     final active = value != 0;
-    return AnimatedContainer(
-      duration: Motion.of(context, Motion.fast),
+    return Container(
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
         color: active
-            ? context.brand.goldSoft.withValues(alpha: 0.55)
+            ? context.colors.primaryContainer.withValues(alpha: 0.45)
             : context.colors.surface,
         borderRadius: BorderRadius.circular(16),
       ),
@@ -65,6 +63,7 @@ class _RowShell extends ConsumerWidget {
               ),
               AnimatedAmount(
                 value,
+                animate: false,
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   color:
@@ -326,6 +325,13 @@ class _PercentRowState extends ConsumerState<PercentRow> {
 
   @override
   Widget build(BuildContext context) {
+    // Shows values set from elsewhere (e.g. the bargain helper), without
+    // touching the field while the user's own typing already matches.
+    ref.listen(widget.draft.select(widget.percentage), (_, value) {
+      if (parseAmount(_controller.text) != value) {
+        _controller.text = formatInput(value);
+      }
+    });
     final current = ref.watch(widget.draft.select(widget.percentage));
     return _RowShell(
       draft: widget.draft,

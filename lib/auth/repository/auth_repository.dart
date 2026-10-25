@@ -30,16 +30,12 @@ class AuthRepository {
 
   Stream<User?> get authStateChange => _auth.authStateChanges();
 
-  /// Returns the signed-in user's profile, or null when signed out.
+  /// Returns the signed-in user, or null for a guest. Read from the auth
+  /// session (not Firestore) so it works offline.
   Future<UserModel?> getCurrentUserModel() async {
     final user = _auth.currentUser;
     if (user == null) return null;
-    final doc = await _users.doc(user.uid).get();
-    final data = doc.data() as Map<String, dynamic>?;
-    if (data == null) {
-      return UserModel(name: user.displayName ?? '', uid: user.uid);
-    }
-    return UserModel.fromMap(data);
+    return UserModel(name: user.displayName ?? '', uid: user.uid);
   }
 
   /// Returns null if the user closed the Google account picker.

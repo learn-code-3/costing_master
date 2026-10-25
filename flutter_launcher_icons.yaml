@@ -1,15 +1,19 @@
-# Regenerate with: dart run flutter_launcher_icons
-# The source images are rendered from lib/widgets/brand_mark.dart.
+# Regenerate with:
+#   flutter test tool/render_icons_test.dart && dart run flutter_launcher_icons
+# The source images are rendered from lib/widgets/brand_mark.dart. The
+# monochrome layer lets Android 13+ tint the icon with the wallpaper colours
+# ("Themed icons").
 flutter_launcher_icons:
   image_path: "assets/icon/icon.png"
   android: "launcher_icon"
   min_sdk_android: 21
-  adaptive_icon_background: "#4A1C78"
+  adaptive_icon_background: "#001C3B"
   adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  adaptive_icon_monochrome: "assets/icon/icon_monochrome.png"
   ios: true
   remove_alpha_ios: true
   web:
     generate: true
     image_path: "assets/icon/icon.png"
-    background_color: "#3A1460"
-    theme_color: "#5B2A86"
+    background_color: "#001C3B"
+    theme_color: "#1F3A5F"

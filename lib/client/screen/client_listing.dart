@@ -1,18 +1,28 @@
 import 'dart:async';
 
 import 'package:costing_master/auth/notifiers/auth_notifier.dart';
-import 'package:costing_master/auth/screens/login.dart';
 import 'package:costing_master/client/notifier/client_notifier.dart';
+import 'package:costing_master/client/notifier/home_summary.dart';
+import 'package:costing_master/client/screen/client_form_screen.dart';
+import 'package:costing_master/client/widgets/client_avatar.dart';
+import 'package:costing_master/client/widgets/delete_client.dart';
+import 'package:costing_master/client/widgets/how_it_works.dart';
+import 'package:costing_master/client/widgets/recent_costings.dart';
+import 'package:costing_master/costings/quote/quote_screen.dart';
 import 'package:costing_master/costings/screens/costing_listing.dart';
+import 'package:costing_master/domain/time_ago.dart';
 import 'package:costing_master/model/client.dart';
-import 'package:costing_master/settings/app_settings.dart';
+import 'package:costing_master/model/costing.dart';
 import 'package:costing_master/settings/settings_notifier.dart';
 import 'package:costing_master/settings/settings_screen.dart';
+import 'package:costing_master/sync/backup_sheet.dart';
+import 'package:costing_master/sync/sync_notifier.dart';
 import 'package:costing_master/theme/app_theme.dart';
 import 'package:costing_master/widgets/app_snack.dart';
 import 'package:costing_master/widgets/brand_mark.dart';
 import 'package:costing_master/widgets/empty_state.dart';
 import 'package:costing_master/widgets/entrance.dart';
+import 'package:costing_master/widgets/section_title.dart';
 import 'package:costing_master/widgets/skeleton.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,6 +36,9 @@ class ClientListing extends ConsumerStatefulWidget {
 }
 
 class _ClientListingState extends ConsumerState<ClientListing> {
+  /// Search appears once the list is long enough to need it.
+  static const _searchFrom = 6;
+
   final _search = TextEditingController();
   Timer? _debounce;
   String _query = '';
@@ -45,13 +58,12 @@ class _ClientListingState extends ConsumerState<ClientListing> {
     });
   }
 
-  Future<void> _logOut() async {
-    final navigator = Navigator.of(context);
-    await ref.read(authProvider.notifier).logOut();
-    navigator.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (_) => false,
-    );
+  void _openQuote(Costing costing, String? clientName) {
+    _animateEntrance = false;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) =>
+          QuoteScreen(costing: costing, clientName: clientName ?? ''),
+    ));
   }
 
   void _openClient(Client client) {
@@ -62,29 +74,64 @@ class _ClientListingState extends ConsumerState<ClientListing> {
   }
 
   Future<void> _addClient() async {
-    final created = await showModalBottomSheet<Client>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => const _AddClientSheet(),
-    );
+    final created = await Navigator.of(context).push<Client>(
+        MaterialPageRoute(builder: (_) => const ClientFormScreen()));
     if (created != null && mounted) {
       showAppSnack(context, '${created.name} ઉમેરાયા', type: SnackType.success);
+    }
+  }
+
+  Future<void> _showActions(Client client) async {
+    unawaited(HapticFeedback.selectionClick());
+    final action = await showModalBottomSheet<_ClientAction>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('સુધારો'),
+              subtitle: const Text('Edit name, phone, city'),
+              onTap: () => Navigator.pop(context, _ClientAction.edit),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline_rounded,
+                  color: context.colors.error),
+              title: const Text('ડિલીટ કરો'),
+              subtitle: const Text('Delete trader and costings'),
+              onTap: () => Navigator.pop(context, _ClientAction.delete),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    switch (action) {
+      case _ClientAction.edit:
+        await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => ClientFormScreen(client: client)));
+      case _ClientAction.delete:
+        await deleteClientWithUndo(context, ref, client);
+      case null:
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final clients = ref.watch(clientsProvider);
-    final userName = ref.watch(authProvider.select((u) => u.value?.name ?? ''));
+    final signedIn = ref.watch(authProvider.select((u) => u.value != null));
     final businessName = ref.watch(
         settingsProvider.select((s) => s.value?.profile.businessName ?? ''));
-    final firstName = userName.trim().split(' ').first;
+    final syncing = ref.watch(syncProvider.select((s) => s.syncing));
+    final summary = ref.watch(homeSummaryProvider).value;
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addClient,
         icon: const Icon(Icons.person_add_alt_1_rounded),
-        label: const Text('ગ્રાહક ઉમેરો'),
+        label: const Text('વેપારી ઉમેરો'),
       ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(clientsProvider.future),
@@ -93,116 +140,56 @@ class _ClientListingState extends ConsumerState<ClientListing> {
           slivers: [
             SliverAppBar(
               pinned: true,
-              expandedHeight: 168,
-              foregroundColor: Colors.white,
-              backgroundColor: context.brand.plumDeep,
-              title: const Text('ગ્રાહકો'),
+              leading: const Padding(
+                padding: EdgeInsets.only(left: 12),
+                child: BrandMark(size: 32),
+              ),
+              leadingWidth: 52,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    businessName.isEmpty ? 'કોસ્ટિંગ માસ્ટર' : businessName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (summary != null && clients.value?.isNotEmpty == true)
+                    Text(
+                      '${clients.value!.length} વેપારી · '
+                      '${summary.total} ડિઝાઇન · '
+                      '${summary.thisMonth} આ મહિને',
+                      style: context.text.labelMedium
+                          ?.copyWith(color: context.colors.onSurfaceVariant),
+                    ),
+                ],
+              ),
               actions: [
+                if (!signedIn)
+                  IconButton(
+                    tooltip: 'બેકઅપ · Back up',
+                    icon: const Icon(Icons.cloud_upload_outlined),
+                    onPressed: () => showBackupSheet(context),
+                  ),
                 IconButton(
-                  tooltip: 'મારો બિઝનેસ',
-                  icon: const Icon(Icons.storefront_outlined),
+                  tooltip: 'સેટિંગ્સ · Settings',
+                  icon: const Icon(Icons.settings_outlined),
                   onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => const SettingsScreen())),
                 ),
-                PopupMenuButton<String>(
-                  tooltip: 'Account',
-                  icon: const Icon(Icons.account_circle_outlined),
-                  onSelected: (value) {
-                    if (value == 'logout') _logOut();
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: 'logout',
-                      child: ListTile(
-                        leading: Icon(Icons.logout_rounded),
-                        title: Text('લૉગ આઉટ'),
-                        subtitle: Text('Log out'),
-                      ),
-                    ),
-                  ],
-                ),
               ],
-              flexibleSpace: FlexibleSpaceBar(
-                collapseMode: CollapseMode.parallax,
-                background: DecoratedBox(
-                  decoration:
-                      BoxDecoration(gradient: context.brand.heroGradient),
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 56, 20, 16),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Text(
-                                  firstName.isEmpty
-                                      ? 'નમસ્તે 🙏'
-                                      : 'નમસ્તે, $firstName 🙏',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                Text(
-                                  businessName.isEmpty
-                                      ? 'આજે કોની કોસ્ટિંગ બનાવીશું?'
-                                      : businessName,
-                                  style: TextStyle(
-                                    color: context.brand.gold,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const BrandMark(size: 56),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                child: TextField(
-                  controller: _search,
-                  onChanged: _onSearch,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: 'ગ્રાહક શોધો · Search clients',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: ValueListenableBuilder(
-                      valueListenable: _search,
-                      builder: (_, value, __) => value.text.isEmpty
-                          ? const SizedBox.shrink()
-                          : IconButton(
-                              icon: const Icon(Icons.close_rounded),
-                              onPressed: () {
-                                _search.clear();
-                                _onSearch('');
-                              },
-                            ),
-                    ),
-                  ),
-                ),
-              ),
             ),
             ...switch (clients) {
-              AsyncValue(:final value?) => _clientSlivers(value),
+              // An empty phone that is pulling its backup is still loading.
+              AsyncValue(:final value?)
+                  when !(value.isEmpty && signedIn && syncing) =>
+                _clientSlivers(value, signedIn: signedIn, summary: summary),
               AsyncError() => [
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: EmptyState(
                       icon: Icons.cloud_off_rounded,
-                      title: 'ગ્રાહકો લોડ ન થયા',
-                      message: 'ઇન્ટરનેટ તપાસીને ફરી પ્રયત્ન કરો',
+                      title: 'વેપારીઓ લોડ ન થયા',
+                      message: 'ફરી પ્રયત્ન કરો · Please try again',
                       actionLabel: 'ફરી પ્રયત્ન કરો',
                       onAction: () => ref.invalidate(clientsProvider),
                     ),
@@ -224,180 +211,176 @@ class _ClientListingState extends ConsumerState<ClientListing> {
     );
   }
 
-  List<Widget> _clientSlivers(List<Client> all) {
+  List<Widget> _clientSlivers(List<Client> all,
+      {required bool signedIn, required HomeSummary? summary}) {
     if (all.isEmpty) {
       return [
         SliverFillRemaining(
           hasScrollBody: false,
           child: EmptyState(
             icon: Icons.groups_2_outlined,
-            title: 'હજુ કોઈ ગ્રાહક નથી',
-            message: 'પહેલો ગ્રાહક ઉમેરો અને તેમની સાડીની કોસ્ટિંગ બનાવો.',
-            actionLabel: 'ગ્રાહક ઉમેરો',
+            title: 'હજુ કોઈ વેપારી નથી',
+            message: 'પહેલો વેપારી ઉમેરો અને તેમની સાડીની કોસ્ટિંગ બનાવો.',
+            actionLabel: 'વેપારી ઉમેરો',
             onAction: _addClient,
+            secondaryActionLabel:
+                signedIn ? null : 'પહેલાં બેકઅપ કર્યું છે? પાછું લાવો',
+            onSecondaryAction: () => showBackupSheet(context, restore: true),
           ),
         ),
       ];
     }
-    final clients = _query.isEmpty
+    final searchable = all.length > _searchFrom;
+    final clients = !searchable || _query.isEmpty
         ? all
         : all.where((c) => c.name.toLowerCase().contains(_query)).toList();
-    if (clients.isEmpty) {
-      return [
+    final names = {for (final c in all) c.guid: c.name};
+    final recent = summary?.recent ?? const <Costing>[];
+
+    return [
+      if (summary?.total == 0)
+        const SliverPadding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+          sliver: SliverToBoxAdapter(child: HowItWorks()),
+        ),
+      if (recent.isNotEmpty) ...[
+        const SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverToBoxAdapter(
+              child: SectionTitle('તાજેતરની કોસ્ટિંગ', 'Recent')),
+        ),
+        SliverToBoxAdapter(
+          child: RecentCostings(
+            costings: recent,
+            onOpen: (costing) => _openQuote(costing, names[costing.clientGuid]),
+          ),
+        ),
+      ],
+      const SliverPadding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        sliver: SliverToBoxAdapter(child: SectionTitle('વેપારીઓ', 'Traders')),
+      ),
+      if (searchable)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: TextField(
+              controller: _search,
+              onChanged: _onSearch,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'વેપારી શોધો · Search traders',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: ValueListenableBuilder(
+                  valueListenable: _search,
+                  builder: (_, value, __) => value.text.isEmpty
+                      ? const SizedBox.shrink()
+                      : IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () {
+                            _search.clear();
+                            _onSearch('');
+                          },
+                        ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      if (clients.isEmpty)
         SliverFillRemaining(
           hasScrollBody: false,
           child: EmptyState(
             icon: Icons.search_off_rounded,
-            title: 'કોઈ ગ્રાહક મળ્યા નહીં',
-            message: '"${_search.text}" નામે કોઈ ગ્રાહક નથી',
+            title: 'કોઈ વેપારી મળ્યા નહીં',
+            message: '"${_search.text}" નામે કોઈ વેપારી નથી',
+          ),
+        )
+      else
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+          sliver: SliverList.builder(
+            itemCount: clients.length,
+            itemBuilder: (context, index) {
+              final client = clients[index];
+              return Entrance(
+                key: ValueKey(client.guid),
+                index: index,
+                enabled: _animateEntrance,
+                child: _ClientTile(
+                  client: client,
+                  stats: summary?.byClient[client.guid],
+                  first: index == 0,
+                  last: index == clients.length - 1,
+                  onTap: () => _openClient(client),
+                  onLongPress: () => _showActions(client),
+                ),
+              );
+            },
           ),
         ),
-      ];
-    }
-    return [
-      SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-        sliver: SliverList.builder(
-          itemCount: clients.length,
-          itemBuilder: (context, index) {
-            final client = clients[index];
-            return Entrance(
-              key: ValueKey(client.guid),
-              index: index,
-              enabled: _animateEntrance,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: _ClientTile(
-                    client: client, onTap: () => _openClient(client)),
-              ),
-            );
-          },
-        ),
-      ),
+      // Room for the floating button over the last item.
+      const SliverToBoxAdapter(child: SizedBox(height: 96)),
     ];
   }
 }
 
+enum _ClientAction { edit, delete }
+
+/// One row of the grouped client list; [first] and [last] round the
+/// group's corners and [last] drops the divider.
 class _ClientTile extends StatelessWidget {
   final Client client;
+  final ClientStats? stats;
+  final bool first;
+  final bool last;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
-  const _ClientTile({required this.client, required this.onTap});
+  const _ClientTile({
+    required this.client,
+    required this.stats,
+    required this.first,
+    required this.last,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        quoteAccents[client.name.hashCode.abs() % quoteAccents.length];
-    final initials = client.name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((w) => w.isNotEmpty)
-        .take(2)
-        .map((w) => w.characters.first.toUpperCase())
-        .join();
-    return Card(
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        leading: CircleAvatar(
-          radius: 24,
-          backgroundColor: color.withValues(alpha: 0.15),
-          child: Text(
-            initials,
-            style: TextStyle(color: color, fontWeight: FontWeight.w800),
-          ),
-        ),
-        title: Text(
-          client.name,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16.5),
-        ),
-        subtitle: const Text('કોસ્ટિંગ જુઓ · View costings'),
-        trailing: const Icon(Icons.chevron_right_rounded),
+    final count = stats?.count ?? 0;
+    final lastSaved = stats?.lastUpdated;
+    final details = [
+      if (count == 0) 'હજુ કોસ્ટિંગ નથી' else '$count ડિઝાઇન',
+      if (lastSaved != null) timeAgo(lastSaved),
+      if (client.city.isNotEmpty) client.city,
+    ].join(' · ');
+    const corner = Radius.circular(20);
+    return Material(
+      color: context.colors.surfaceContainerLow,
+      clipBehavior: Clip.antiAlias,
+      borderRadius: BorderRadius.vertical(
+        top: first ? corner : Radius.zero,
+        bottom: last ? corner : Radius.zero,
       ),
-    );
-  }
-}
-
-class _AddClientSheet extends ConsumerStatefulWidget {
-  const _AddClientSheet();
-
-  @override
-  ConsumerState<_AddClientSheet> createState() => _AddClientSheetState();
-}
-
-class _AddClientSheetState extends ConsumerState<_AddClientSheet> {
-  final _name = TextEditingController();
-  String? _error;
-  bool _saving = false;
-
-  @override
-  void dispose() {
-    _name.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final name = _name.text.trim();
-    if (name.isEmpty) {
-      setState(() => _error = 'નામ લખો · Enter a name');
-      return;
-    }
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    try {
-      final client =
-          await ref.read(clientsProvider.notifier).createClient(name);
-      unawaited(HapticFeedback.lightImpact());
-      if (mounted) Navigator.pop(context, client);
-    } on DuplicateClientException {
-      setState(() => _error = 'આ નામે ગ્રાહક પહેલેથી છે · Already exists');
-    } catch (_) {
-      setState(() => _error = 'સેવ ન થયું, ઇન્ટરનેટ તપાસો');
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          20, 0, 20, MediaQuery.viewInsetsOf(context).bottom + 20),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('નવો ગ્રાહક',
-              style: context.text.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w800)),
-          Text('New client',
-              style: context.text.bodyMedium
-                  ?.copyWith(color: context.colors.onSurfaceVariant)),
-          const SizedBox(height: 18),
-          TextField(
-            controller: _name,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _submit(),
-            decoration: InputDecoration(
-              labelText: 'ગ્રાહકનું નામ',
-              hintText: 'Client name',
-              prefixIcon: const Icon(Icons.person_outline_rounded),
-              errorText: _error,
+          ListTile(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            contentPadding: const EdgeInsets.fromLTRB(16, 2, 8, 2),
+            leading: ClientAvatar(name: client.name, radius: 20),
+            title: Text(
+              client.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
+            subtitle:
+                Text(details, maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: const Icon(Icons.chevron_right_rounded),
           ),
-          const SizedBox(height: 18),
-          FilledButton(
-            onPressed: _saving ? null : _submit,
-            child: _saving
-                ? const SizedBox.square(
-                    dimension: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2.5))
-                : const Text('સેવ કરો'),
-          ),
+          if (!last) const Divider(indent: 72),
         ],
       ),
     );

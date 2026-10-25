@@ -103,20 +103,15 @@ class _DesignHeaderState extends ConsumerState<DesignHeader> {
     });
     final costing = ref.read(widget.draft).costing;
     try {
-      final url = await storage.upload(
-        file,
-        fileName:
-            '${costing.createdBy}_${costing.guid}_${DateTime.now().millisecondsSinceEpoch}',
-        onProgress: (p) {
-          if (mounted) setState(() => _uploadProgress = p);
-        },
-      );
-      notifier.setImageUrl(url);
+      // Kept on the phone; it is uploaded with the costing on backup.
+      final photo = await LocalImages.save(
+          file, '${costing.guid}_${DateTime.now().millisecondsSinceEpoch}');
+      notifier.setImageUrl(photo);
     } catch (_) {
       if (mounted) {
         setState(() => _localPreview = null);
         showAppSnack(
-            context, 'ફોટો અપલોડ ન થયો, ફરી પ્રયત્ન કરો · Upload failed',
+            context, 'ફોટો સેવ ન થયો, ફરી પ્રયત્ન કરો · Could not save photo',
             type: SnackType.error);
       }
     } finally {
@@ -130,8 +125,6 @@ class _DesignHeaderState extends ConsumerState<DesignHeader> {
         widget.draft.select((d) => d.hasPhoto ? d.costing.imageUrl : ''));
     final nameMissing =
         widget.showErrors && ref.watch(widget.draft.select((d) => !d.hasName));
-    final photoMissing =
-        widget.showErrors && imageUrl.isEmpty && _localPreview == null;
 
     return Card(
       child: Padding(
@@ -143,7 +136,6 @@ class _DesignHeaderState extends ConsumerState<DesignHeader> {
               imageUrl: imageUrl,
               localPreview: _localPreview,
               progress: _uploadProgress,
-              error: photoMissing,
               onTap: _uploadProgress == null ? _choosePhoto : null,
             ),
             const SizedBox(width: 14),
@@ -196,14 +188,12 @@ class _PhotoTile extends StatelessWidget {
   final String imageUrl;
   final File? localPreview;
   final double? progress;
-  final bool error;
   final VoidCallback? onTap;
 
   const _PhotoTile({
     required this.imageUrl,
     required this.localPreview,
     required this.progress,
-    required this.error,
     required this.onTap,
   });
 
@@ -220,17 +210,16 @@ class _PhotoTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.add_a_photo_rounded,
-              size: 30,
-              color: error ? context.colors.error : context.colors.primary),
+              size: 30, color: context.colors.primary),
           const SizedBox(height: 6),
           Text(
-            'ફોટો *',
+            'ફોટો',
             style: TextStyle(
               fontWeight: FontWeight.w600,
-              color: error ? context.colors.error : context.colors.primary,
+              color: context.colors.primary,
             ),
           ),
-          Text('Photo', style: context.text.labelSmall),
+          Text('Optional', style: context.text.labelSmall),
         ],
       );
     }
@@ -241,18 +230,13 @@ class _PhotoTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: radius,
-        child: AnimatedContainer(
-          duration: Motion.of(context, Motion.fast),
+        child: Container(
           width: 104,
           height: 132,
           decoration: BoxDecoration(
             borderRadius: radius,
             color: context.colors.primaryContainer.withValues(alpha: 0.35),
-            border: Border.all(
-              color:
-                  error ? context.colors.error : context.colors.outlineVariant,
-              width: error ? 1.6 : 1,
-            ),
+            border: Border.all(color: context.colors.outlineVariant),
           ),
           child: ClipRRect(
             borderRadius: radius,

@@ -1,55 +1,62 @@
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:animations/animations.dart';
+import 'package:costing_master/settings/app_settings.dart';
 import 'package:flutter/material.dart';
 
-/// Brand colours that Material's [ColorScheme] has no slot for.
+/// Colours for the app's deep "hero" areas (home header, total bar, backup
+/// sheet), derived from the colour scheme so they follow the chosen palette.
+/// They stay dark in both light and dark mode, with white text on top.
 @immutable
 class BrandColors extends ThemeExtension<BrandColors> {
-  final Color gold;
-  final Color goldSoft;
-  final Color onGold;
-  final Color plumDeep;
-  final Color plumBright;
+  final Color heroStart;
+  final Color heroEnd;
+
+  /// For amounts, icons and buttons that sit on the hero gradient.
+  final Color heroAccent;
+  final Color onHeroAccent;
 
   const BrandColors({
-    required this.gold,
-    required this.goldSoft,
-    required this.onGold,
-    required this.plumDeep,
-    required this.plumBright,
+    required this.heroStart,
+    required this.heroEnd,
+    required this.heroAccent,
+    required this.onHeroAccent,
   });
+
+  factory BrandColors.of(ColorScheme scheme) => BrandColors(
+        heroStart: scheme.onPrimaryFixed,
+        heroEnd: scheme.onPrimaryFixedVariant,
+        heroAccent: scheme.primaryFixed,
+        onHeroAccent: scheme.onPrimaryFixed,
+      );
 
   LinearGradient get heroGradient => LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [plumDeep, plumBright],
+        colors: [heroStart, heroEnd],
       );
 
   @override
   BrandColors copyWith({
-    Color? gold,
-    Color? goldSoft,
-    Color? onGold,
-    Color? plumDeep,
-    Color? plumBright,
+    Color? heroStart,
+    Color? heroEnd,
+    Color? heroAccent,
+    Color? onHeroAccent,
   }) =>
       BrandColors(
-        gold: gold ?? this.gold,
-        goldSoft: goldSoft ?? this.goldSoft,
-        onGold: onGold ?? this.onGold,
-        plumDeep: plumDeep ?? this.plumDeep,
-        plumBright: plumBright ?? this.plumBright,
+        heroStart: heroStart ?? this.heroStart,
+        heroEnd: heroEnd ?? this.heroEnd,
+        heroAccent: heroAccent ?? this.heroAccent,
+        onHeroAccent: onHeroAccent ?? this.onHeroAccent,
       );
 
   @override
   BrandColors lerp(BrandColors? other, double t) {
     if (other == null) return this;
     return BrandColors(
-      gold: Color.lerp(gold, other.gold, t)!,
-      goldSoft: Color.lerp(goldSoft, other.goldSoft, t)!,
-      onGold: Color.lerp(onGold, other.onGold, t)!,
-      plumDeep: Color.lerp(plumDeep, other.plumDeep, t)!,
-      plumBright: Color.lerp(plumBright, other.plumBright, t)!,
+      heroStart: Color.lerp(heroStart, other.heroStart, t)!,
+      heroEnd: Color.lerp(heroEnd, other.heroEnd, t)!,
+      heroAccent: Color.lerp(heroAccent, other.heroAccent, t)!,
+      onHeroAccent: Color.lerp(onHeroAccent, other.onHeroAccent, t)!,
     );
   }
 }
@@ -61,26 +68,23 @@ extension BrandTheme on BuildContext {
 }
 
 abstract final class AppTheme {
-  static const plum = Color(0xFF5B2A86);
-  static const gold = Color(0xFFC9A227);
+  /// [wallpaper] is the phone's own primary colour (Android 12+), used when
+  /// [color] is [AppColor.system].
+  static ThemeData light(AppColor color, {Color? wallpaper}) =>
+      _build(Brightness.light, _seed(color, wallpaper));
+  static ThemeData dark(AppColor color, {Color? wallpaper}) =>
+      _build(Brightness.dark, _seed(color, wallpaper));
 
-  static ThemeData light() => _build(Brightness.light);
-  static ThemeData dark() => _build(Brightness.dark);
+  static Color _seed(AppColor color, Color? wallpaper) =>
+      color == AppColor.system && wallpaper != null ? wallpaper : color.seed;
 
-  static ThemeData _build(Brightness brightness) {
+  static ThemeData _build(Brightness brightness, Color seed) {
     final isDark = brightness == Brightness.dark;
-    final scheme = ColorScheme.fromSeed(
-      seedColor: plum,
-      brightness: brightness,
-      tertiary: isDark ? const Color(0xFFE6C55A) : const Color(0xFF8A6D00),
-    );
-    final brand = BrandColors(
-      gold: isDark ? const Color(0xFFE6C55A) : gold,
-      goldSoft: isDark ? const Color(0xFF3B3218) : const Color(0xFFFFF4D6),
-      onGold: const Color(0xFF2B1F00),
-      plumDeep: const Color(0xFF3A1460),
-      plumBright: const Color(0xFF7B3FB0),
-    );
+    // Rebuilding the scheme from one seed keeps every role (surfaces,
+    // containers, fixed colours) consistent, also for wallpaper colours.
+    final scheme =
+        ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
+    final brand = BrandColors.of(scheme);
     final radius = BorderRadius.circular(14);
     // Derive every custom text style from the platform typography so they all
     // share the same font family.

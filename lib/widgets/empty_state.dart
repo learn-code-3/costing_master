@@ -8,6 +8,10 @@ class EmptyState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
+  /// A quieter text link under the main action.
+  final String? secondaryActionLabel;
+  final VoidCallback? onSecondaryAction;
+
   const EmptyState({
     super.key,
     required this.icon,
@@ -15,6 +19,8 @@ class EmptyState extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
+    this.secondaryActionLabel,
+    this.onSecondaryAction,
   });
 
   @override
@@ -53,6 +59,13 @@ class EmptyState extends StatelessWidget {
                 onPressed: onAction,
                 icon: const Icon(Icons.add_rounded),
                 label: Text(actionLabel!),
+              ),
+            ],
+            if (secondaryActionLabel != null) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: onSecondaryAction,
+                child: Text(secondaryActionLabel!),
               ),
             ],
           ],

@@ -46,7 +46,7 @@ class QuoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: AppTheme.light(),
+      data: AppTheme.light(AppColor.navy),
       child: Builder(builder: (context) => _build(context)),
     );
   }
@@ -54,7 +54,7 @@ class QuoteCard extends StatelessWidget {
   Widget _build(BuildContext context) {
     final breakdown = CostingCalculator.compute(costing);
     final accent = style.accent;
-    final gold = context.brand.gold;
+    const gold = quoteGold;
     final template = style.template;
     final digits = style.gujaratiDigits;
     String money(double v, {int decimals = 2}) =>
@@ -316,7 +316,7 @@ class _DesignInfo extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'ગ્રાહક: $clientName',
+                'વેપારી: $clientName',
                 style: const TextStyle(color: Color(0xFF5F5B66)),
               ),
             ),

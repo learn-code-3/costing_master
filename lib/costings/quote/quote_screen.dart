@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:costing_master/costings/bargain/bargain_sheet.dart';
 import 'package:costing_master/costings/calculator/costing_calculator_screen.dart';
+import 'package:costing_master/costings/notifier/costings_notifier.dart';
 import 'package:costing_master/costings/quote/quote_card.dart';
 import 'package:costing_master/costings/quote/quote_export.dart';
 import 'package:costing_master/domain/costing_calculator.dart';
@@ -8,7 +10,9 @@ import 'package:costing_master/domain/money.dart';
 import 'package:costing_master/model/costing.dart';
 import 'package:costing_master/settings/app_settings.dart';
 import 'package:costing_master/settings/settings_notifier.dart';
-import 'package:costing_master/settings/settings_screen.dart';
+import 'package:costing_master/settings/screens/business_profile_screen.dart';
+import 'package:costing_master/settings/screens/quote_design_screen.dart';
+import 'package:costing_master/sync/backup_nudge.dart';
 import 'package:costing_master/theme/app_theme.dart';
 import 'package:costing_master/theme/motion.dart';
 import 'package:costing_master/widgets/app_snack.dart';
@@ -32,7 +36,7 @@ class QuoteScreen extends ConsumerStatefulWidget {
   ConsumerState<QuoteScreen> createState() => _QuoteScreenState();
 }
 
-enum _Busy { none, share, save }
+enum _Busy { none, share, save, pdf }
 
 class _QuoteScreenState extends ConsumerState<QuoteScreen> {
   final _boundary = GlobalKey();
@@ -42,6 +46,22 @@ class _QuoteScreenState extends ConsumerState<QuoteScreen> {
 
   String get _fileName =>
       QuoteExport.fileName(widget.costing.sariName, widget.costing.designNo);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.justSaved) {
+      // Let the "saved" moment land first, and never stack two asks: the
+      // business-profile prompt takes priority when it is showing.
+      Future.delayed(const Duration(milliseconds: 900), () {
+        final settings = ref.read(settingsProvider).value;
+        final profilePrompt = settings != null &&
+            settings.profile.isEmpty &&
+            !settings.profilePrompted;
+        if (mounted && !profilePrompt) maybeShowBackupNudge(context, ref);
+      });
+    }
+  }
 
   Future<void> _run(_Busy kind, Future<void> Function() action) async {
     if (_busy != _Busy.none) return;
@@ -58,19 +78,27 @@ class _QuoteScreenState extends ConsumerState<QuoteScreen> {
     }
   }
 
+  String get _shareText {
+    final grand = CostingCalculator.compute(widget.costing).grandTotal;
+    return '${widget.costing.sariName} – ${formatRupees(grand)}\n'
+        'Made with કોસ્ટિંગ માસ્ટર: $playStoreUrl';
+  }
+
+  Rect? get _shareOrigin {
+    final box = _shareButton.currentContext?.findRenderObject() as RenderBox?;
+    return box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+  }
+
   Future<void> _share() => _run(_Busy.share, () async {
         final png = await QuoteExport.capture(_boundary);
-        final box =
-            _shareButton.currentContext?.findRenderObject() as RenderBox?;
-        final grand = CostingCalculator.compute(widget.costing).grandTotal;
-        await QuoteExport.share(
-          png,
-          fileName: _fileName,
-          text: '${widget.costing.sariName} – ${formatRupees(grand)}\n'
-              'Made with કોસ્ટિંગ માસ્ટર: $playStoreUrl',
-          origin:
-              box == null ? null : box.localToGlobal(Offset.zero) & box.size,
-        );
+        await QuoteExport.share(png,
+            fileName: _fileName, text: _shareText, origin: _shareOrigin);
+      });
+
+  Future<void> _sharePdf() => _run(_Busy.pdf, () async {
+        final png = await QuoteExport.capture(_boundary);
+        await QuoteExport.sharePdf(png,
+            fileName: _fileName, text: _shareText, origin: _shareOrigin);
       });
 
   Future<void> _saveToGallery() => _run(_Busy.save, () async {
@@ -96,10 +124,42 @@ class _QuoteScreenState extends ConsumerState<QuoteScreen> {
     ));
   }
 
-  void _openSettings() {
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+  void _bargain() => showBargainSheet(
+        context,
+        breakdown: CostingCalculator.compute(widget.costing),
+        applyLabel: 'આ ભાવે સેવ કરો · Save at this price',
+        onApply: _saveWithProfit,
+      );
+
+  /// Saves the costing at the agreed price and shows its updated quote.
+  Future<void> _saveWithProfit(double profitPercentage) async {
+    final costing = CostingCalculator.withTotals(widget.costing.copyWith(
+      profitPercentage: profitPercentage,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    ));
+    try {
+      await ref
+          .read(costingsProvider(costing.clientGuid).notifier)
+          .save(costing);
+    } catch (_) {
+      if (mounted) {
+        showAppSnack(context, 'સેવ ન થયું · Could not save',
+            type: SnackType.error);
+      }
+      return;
+    }
+    if (!mounted) return;
+    final price = CostingCalculator.compute(costing).grandTotal;
+    showAppSnack(context, '${formatRupees(price, decimals: 0)} પર સેવ થયું',
+        type: SnackType.success);
+    await Navigator.of(context).pushReplacement(MaterialPageRoute(
+      builder: (_) =>
+          QuoteScreen(costing: costing, clientName: widget.clientName),
+    ));
   }
+
+  void _open(Widget screen) =>
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
 
   @override
   Widget build(BuildContext context) {
@@ -120,8 +180,17 @@ class _QuoteScreenState extends ConsumerState<QuoteScreen> {
           ),
           IconButton(
             tooltip: 'ડિઝાઇન · Quote style',
-            onPressed: _openSettings,
+            onPressed: () => _open(const QuoteDesignScreen()),
             icon: const Icon(Icons.palette_outlined),
+          ),
+          IconButton(
+            tooltip: 'PDF',
+            onPressed: _busy == _Busy.none ? _sharePdf : null,
+            icon: _busy == _Busy.pdf
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2.5))
+                : const Icon(Icons.picture_as_pdf_outlined),
           ),
         ],
       ),
@@ -138,7 +207,7 @@ class _QuoteScreenState extends ConsumerState<QuoteScreen> {
                       ref
                           .read(settingsProvider.notifier)
                           .edit((s) => s.copyWith(profilePrompted: true));
-                      _openSettings();
+                      _open(const BusinessProfileScreen());
                     },
                     onDismiss: () => ref
                         .read(settingsProvider.notifier)
@@ -151,7 +220,7 @@ class _QuoteScreenState extends ConsumerState<QuoteScreen> {
               ButtonSegment(
                 value: QuoteMode.customer,
                 icon: Icon(Icons.storefront_outlined),
-                label: Text('ગ્રાહક માટે'),
+                label: Text('વેપારી માટે'),
               ),
               ButtonSegment(
                 value: QuoteMode.internal,
@@ -166,7 +235,7 @@ class _QuoteScreenState extends ConsumerState<QuoteScreen> {
             padding: const EdgeInsets.only(top: 6, bottom: 12),
             child: Text(
               _mode == QuoteMode.customer
-                  ? 'વટાવ અને નફો ભાવમાં સમાવેલ છે – ગ્રાહકને દેખાશે નહીં'
+                  ? 'વટાવ અને નફો ભાવમાં સમાવેલ છે – વેપારીને દેખાશે નહીં'
                   : 'સંપૂર્ણ હિસાબ વટાવ અને નફા સાથે – ફક્ત તમારા માટે',
               textAlign: TextAlign.center,
               style: context.text.bodySmall
@@ -198,33 +267,46 @@ class _QuoteScreenState extends ConsumerState<QuoteScreen> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _busy == _Busy.none ? _saveToGallery : null,
-                  icon: _busy == _Busy.save
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.download_rounded),
-                  label: const Text('ગેલેરી'),
-                ),
+              FilledButton.tonalIcon(
+                onPressed: _busy == _Busy.none ? _bargain : null,
+                icon: const Icon(Icons.handshake_outlined),
+                label: const Text('વેપારી ઓછો ભાવ કહે છે? · Bargain'),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: FilledButton.icon(
-                  key: _shareButton,
-                  onPressed: _busy == _Busy.none ? _share : null,
-                  icon: _busy == _Busy.share
-                      ? SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: context.colors.onPrimary))
-                      : const Icon(Icons.share_rounded),
-                  label: const Text('શેર કરો · WhatsApp'),
-                ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _busy == _Busy.none ? _saveToGallery : null,
+                      icon: _busy == _Busy.save
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.download_rounded),
+                      label: const Text('ગેલેરી'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton.icon(
+                      key: _shareButton,
+                      onPressed: _busy == _Busy.none ? _share : null,
+                      icon: _busy == _Busy.share
+                          ? SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: context.colors.onPrimary))
+                          : const Icon(Icons.share_rounded),
+                      label: const Text('શેર કરો · WhatsApp'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -280,7 +362,7 @@ class _ProfilePrompt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: context.brand.goldSoft,
+      color: context.colors.primaryContainer,
       margin: const EdgeInsets.only(bottom: 14),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
@@ -290,14 +372,14 @@ class _ProfilePrompt extends StatelessWidget {
             Row(
               children: [
                 Icon(Icons.workspace_premium_rounded,
-                    color: context.brand.onGold),
+                    color: context.colors.onPrimaryContainer),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'તમારા બિઝનેસનું નામ ઉમેરો – કોસ્ટિંગ પર દેખાશે',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: context.brand.onGold,
+                      color: context.colors.onPrimaryContainer,
                     ),
                   ),
                 ),
@@ -309,7 +391,8 @@ class _ProfilePrompt extends StatelessWidget {
                 'Your name, logo and phone on every quote you share.',
                 style: TextStyle(
                     fontSize: 12.5,
-                    color: context.brand.onGold.withValues(alpha: 0.8)),
+                    color: context.colors.onPrimaryContainer
+                        .withValues(alpha: 0.8)),
               ),
             ),
             Row(

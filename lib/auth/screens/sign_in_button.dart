@@ -35,7 +35,7 @@ class SignInButton extends ConsumerWidget {
                       key: const ValueKey('loading'),
                       dimension: 24,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2.5, color: context.brand.plumDeep),
+                          strokeWidth: 2.5, color: context.brand.heroStart),
                     )
                   : const Row(
                       key: ValueKey('label'),
@@ -43,7 +43,7 @@ class SignInButton extends ConsumerWidget {
                       children: [
                         _GoogleG(),
                         SizedBox(width: 12),
-                        Text('Google થી શરૂ કરો'),
+                        Text('Google થી બેકઅપ ચાલુ કરો'),
                       ],
                     ),
             ),
@@ -63,7 +63,7 @@ class SignInButton extends ConsumerWidget {
                       SizedBox(width: 8),
                       Flexible(
                         child: Text(
-                          'સાઇન ઇન માટે ઇન્ટરનેટ જરૂરી છે',
+                          'બેકઅપ માટે ઇન્ટરનેટ જરૂરી છે',
                           style: TextStyle(color: Colors.white70),
                         ),
                       ),

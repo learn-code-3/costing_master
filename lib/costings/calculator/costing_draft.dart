@@ -14,11 +14,15 @@ class DraftSeed {
   final String userUid;
   final Costing? existing;
 
+  /// Starts a new costing pre-filled from this one ("duplicate").
+  final Costing? copyOf;
+
   DraftSeed({
     required this.clientGuid,
     required this.clientName,
     required this.userUid,
     this.existing,
+    this.copyOf,
   });
 }
 
@@ -43,7 +47,7 @@ class CostingDraft {
   bool get hasPhoto =>
       costing.imageUrl.isNotEmpty && costing.imageUrl != 'null';
   bool get hasAmounts => breakdown.totalExpense > 0;
-  bool get canSave => hasName && hasPhoto && hasAmounts;
+  bool get canSave => hasName && hasAmounts;
 
   DiamondCosting? diamond(PartType part, DiamondType type) =>
       costing.diamondCostingsMap?[part]?[type];
@@ -67,10 +71,20 @@ class CostingDraftNotifier extends Notifier<CostingDraft> {
   @override
   CostingDraft build() {
     final existing = seed.existing;
+    final copyOf = seed.copyOf;
     return CostingDraft(
       clientName: seed.clientName,
       isNew: existing == null,
-      costing: existing ?? _blank(),
+      // A copy is unsaved from the start, so leaving asks to discard it.
+      dirty: copyOf != null,
+      costing: existing ??
+          (copyOf == null
+              ? _blank()
+              : copyOf.copyWith(
+                  guid: const Uuid().v4(),
+                  createdBy: seed.userUid,
+                  sariName: '${copyOf.sariName} (નકલ)',
+                )),
     );
   }
 

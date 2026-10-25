@@ -1,25 +1,22 @@
 import 'dart:async';
 
-import 'package:costing_master/auth/notifiers/auth_notifier.dart';
-import 'package:costing_master/auth/screens/login.dart';
 import 'package:costing_master/client/screen/client_listing.dart';
 import 'package:costing_master/theme/app_theme.dart';
 import 'package:costing_master/widgets/brand_mark.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Plays the brand animation while the signed-in user is resolved, then
-/// routes to the clients home or the login screen.
-class SplashScreen extends ConsumerStatefulWidget {
+/// Plays the brand animation, then opens the clients home. There is no
+/// login step: backup with Google is offered later, from inside the app.
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  ConsumerState<SplashScreen> createState() => _SplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen> {
-  /// Long enough for the mark to finish drawing, never longer.
-  static const _minimumShowTime = Duration(milliseconds: 1300);
+class _SplashScreenState extends State<SplashScreen> {
+  /// The mark's animation plus a beat to see it finished.
+  static const _minimumShowTime = Duration(milliseconds: 1000);
 
   @override
   void initState() {
@@ -28,18 +25,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _route() async {
-    final results = await Future.wait<Object?>([
-      ref
-          .read(authProvider.future)
-          .then<Object?>((u) => u, onError: (_) => null),
-      Future<void>.delayed(_minimumShowTime),
-    ]);
+    await Future<void>.delayed(_minimumShowTime);
     if (!mounted) return;
-    final signedIn = results.first != null;
     Navigator.of(context).pushReplacement(PageRouteBuilder(
-      transitionDuration: const Duration(milliseconds: 500),
-      pageBuilder: (_, __, ___) =>
-          signedIn ? const ClientListing() : const LoginScreen(),
+      transitionDuration: const Duration(milliseconds: 350),
+      pageBuilder: (_, __, ___) => const ClientListing(),
       transitionsBuilder: (_, animation, __, child) =>
           FadeTransition(opacity: animation, child: child),
     ));
@@ -59,7 +49,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                   child: BrandMark(size: 132, animate: true)),
               SizedBox(height: 24),
               _FadeIn(
-                delay: Duration(milliseconds: 600),
+                delay: Duration(milliseconds: 450),
                 child: BrandWordmark(color: Colors.white),
               ),
             ],

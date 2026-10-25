@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:costing_master/common/enums.dart';
+import 'package:costing_master/costings/bargain/bargain_sheet.dart';
 import 'package:costing_master/costings/calculator/costing_draft.dart';
 import 'package:costing_master/costings/calculator/widgets/cost_rows.dart';
 import 'package:costing_master/costings/calculator/widgets/design_header.dart';
@@ -26,12 +27,16 @@ class CostingCalculatorScreen extends ConsumerStatefulWidget {
   final String userUid;
   final Costing? costing;
 
+  /// Opens a new costing pre-filled from this one.
+  final Costing? copyOf;
+
   const CostingCalculatorScreen({
     super.key,
     required this.clientGuid,
     required this.clientName,
     required this.userUid,
     this.costing,
+    this.copyOf,
   });
 
   @override
@@ -46,6 +51,7 @@ class _CostingCalculatorScreenState
     clientName: widget.clientName,
     userUid: widget.userUid,
     existing: widget.costing,
+    copyOf: widget.copyOf,
   ));
   final _scroll = ScrollController();
   bool _showErrors = false;
@@ -63,13 +69,12 @@ class _CostingCalculatorScreenState
       setState(() => _showErrors = true);
       unawaited(HapticFeedback.mediumImpact());
       final missing = [
-        if (!draft.hasPhoto) 'ફોટો',
         if (!draft.hasName) 'સાડીનું નામ',
         if (!draft.hasAmounts) 'ઓછામાં ઓછો એક ખર્ચ',
       ];
       showAppSnack(context, '${missing.join(', ')} ઉમેરો',
           type: SnackType.error);
-      if (!draft.hasPhoto || !draft.hasName) {
+      if (!draft.hasName) {
         _scroll.animateTo(0,
             duration: Motion.of(context, Motion.medium),
             curve: Motion.emphasized);
@@ -97,9 +102,23 @@ class _CostingCalculatorScreenState
     } catch (_) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showAppSnack(context, 'સેવ ન થયું, ઇન્ટરનેટ તપાસો · Could not save',
+      showAppSnack(context, 'સેવ ન થયું · Could not save',
           type: SnackType.error);
     }
+  }
+
+  void _bargain() {
+    final breakdown = ref.read(_draft).breakdown;
+    if (breakdown.totalExpense <= 0) {
+      showAppSnack(context, 'પહેલાં ખર્ચ લખો · Enter the costs first');
+      return;
+    }
+    showBargainSheet(
+      context,
+      breakdown: breakdown,
+      applyLabel: 'આ ભાવ રાખો · Use this price',
+      onApply: (profit) => ref.read(_draft.notifier).setProfit(profit),
+    );
   }
 
   Future<bool> _confirmDiscard() async {
@@ -128,7 +147,7 @@ class _CostingCalculatorScreenState
   Widget build(BuildContext context) {
     final dirty = ref.watch(_draft.select((d) => d.dirty));
     final isNew = widget.costing == null;
-    final existing = widget.costing;
+    final existing = widget.costing ?? widget.copyOf;
 
     bool open(CostSection section) {
       if (existing == null) {
@@ -146,6 +165,13 @@ class _CostingCalculatorScreenState
       },
       child: Scaffold(
         appBar: AppBar(
+          actions: [
+            IconButton(
+              tooltip: 'ભાવ-તાલ · Bargain',
+              icon: const Icon(Icons.handshake_outlined),
+              onPressed: _bargain,
+            ),
+          ],
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

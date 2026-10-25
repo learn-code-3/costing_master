@@ -1,9 +1,11 @@
+import 'package:costing_master/storage/image_storage.dart';
 import 'package:costing_master/theme/app_theme.dart';
 import 'package:costing_master/widgets/skeleton.dart';
 import 'package:flutter/material.dart';
 
 /// A network image decoded at display size (not full resolution), with a
 /// skeleton while loading and a fade-in once the first frame arrives.
+/// Photos not yet backed up ([LocalImages] refs) are read from the phone.
 class NetworkThumb extends StatelessWidget {
   final String url;
   final BoxFit fit;
@@ -27,12 +29,15 @@ class NetworkThumb extends StatelessWidget {
           final width = constraints.hasBoundedWidth
               ? (constraints.maxWidth * dpr).round()
               : null;
-          return Image.network(
-            url,
+          final ImageProvider source = LocalImages.isLocal(url)
+              ? FileImage(LocalImages.file(url)) as ImageProvider
+              : NetworkImage(url);
+          return Image(
+            image: ResizeImage.resizeIfNeeded(
+                fit == BoxFit.cover ? width : null, null, source),
             fit: fit,
             width: double.infinity,
             height: double.infinity,
-            cacheWidth: fit == BoxFit.cover ? width : null,
             gaplessPlayback: true,
             frameBuilder: (context, child, frame, wasSyncLoaded) {
               if (wasSyncLoaded) return child;

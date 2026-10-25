@@ -31,13 +31,6 @@ class TotalBar extends ConsumerWidget {
         decoration: BoxDecoration(
           gradient: brand.heroGradient,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          boxShadow: [
-            BoxShadow(
-              color: brand.plumDeep.withValues(alpha: 0.35),
-              blurRadius: 24,
-              offset: const Offset(0, -6),
-            ),
-          ],
         ),
         child: SafeArea(
           top: false,
@@ -67,15 +60,18 @@ class TotalBar extends ConsumerWidget {
                                 color: Colors.white.withValues(alpha: 0.75)),
                           ],
                         ),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: AnimatedAmount(
-                            breakdown.grandTotal,
-                            style: TextStyle(
-                              color: brand.gold,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
+                        // Only the counting total repaints while it animates.
+                        RepaintBoundary(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: AnimatedAmount(
+                              breakdown.grandTotal,
+                              style: TextStyle(
+                                color: brand.heroAccent,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
                         ),
@@ -98,9 +94,10 @@ class TotalBar extends ConsumerWidget {
                 FilledButton(
                   onPressed: saving ? null : onSave,
                   style: FilledButton.styleFrom(
-                    backgroundColor: brand.gold,
-                    foregroundColor: brand.onGold,
-                    disabledBackgroundColor: brand.gold.withValues(alpha: 0.6),
+                    backgroundColor: brand.heroAccent,
+                    foregroundColor: brand.onHeroAccent,
+                    disabledBackgroundColor:
+                        brand.heroAccent.withValues(alpha: 0.6),
                     padding: const EdgeInsets.symmetric(horizontal: 22),
                   ),
                   child: AnimatedSwitcher(
@@ -111,7 +108,7 @@ class TotalBar extends ConsumerWidget {
                             dimension: 22,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.5,
-                              color: brand.onGold,
+                              color: brand.onHeroAccent,
                             ),
                           )
                         : const Row(

@@ -9,6 +9,7 @@ class NumField extends StatelessWidget {
   final String? prefix;
   final String? suffix;
   final bool integer;
+  final bool autofocus;
   final ValueChanged<String> onChanged;
 
   const NumField({
@@ -20,12 +21,14 @@ class NumField extends StatelessWidget {
     this.prefix,
     this.suffix,
     this.integer = false,
+    this.autofocus = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      autofocus: autofocus,
       onChanged: onChanged,
       keyboardType: TextInputType.numberWithOptions(decimal: !integer),
       textInputAction: TextInputAction.next,

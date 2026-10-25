@@ -52,3 +52,8 @@ Launcher icons are rendered from `lib/widgets/brand_mark.dart` into
 ## Toolchain versions
 
 See [VERSIONS.md](VERSIONS.md) for the exact Flutter, Java, Gradle, AGP and Kotlin versions this project builds with.
+
+## Store screenshots and icons
+
+- `screenshots/` holds the Play Store screenshots (1080×2408). To retake them, run the demo build, which **replaces the phone's data** with a sample workshop: `flutter run --profile -t tool/screenshots_main.dart`. Turn off the phone's eye-comfort / blue-light filter first.
+- Launcher icons are drawn from `lib/widgets/brand_mark.dart`: `flutter test tool/render_icons_test.dart && dart run flutter_launcher_icons`.

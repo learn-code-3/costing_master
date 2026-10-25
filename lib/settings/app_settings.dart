@@ -63,12 +63,16 @@ class BusinessProfile {
 
 enum QuoteTemplate { royal, classic, minimal }
 
+/// Trim colour of the royal quote template. Quotes are the user's document,
+/// so they keep their own colours whatever the app theme is.
+const quoteGold = Color(0xFFC9A227);
+
 /// Accent colours a user can pick for their quote.
 const quoteAccents = <Color>[
   Color(0xFF5B2A86), // plum
   Color(0xFF8E1B3A), // maroon
   Color(0xFF0F6B4F), // emerald
-  Color(0xFF1E3A8A), // royal blue
+  Color(0xFF1E3A8A), // royal blue (default)
   Color(0xFFB4530A), // saffron
   Color(0xFF262626), // charcoal
 ];
@@ -85,7 +89,7 @@ class QuoteStyle {
 
   const QuoteStyle({
     this.template = QuoteTemplate.royal,
-    this.accentIndex = 0,
+    this.accentIndex = 3,
     this.showPhoto = true,
     this.showItems = true,
     this.showDate = true,
@@ -158,11 +162,27 @@ class QuoteStyle {
       showDate, gujaratiDigits, showFooter);
 }
 
+/// The app's colour palette. [system] follows the phone's wallpaper colours
+/// (Android 12+) and falls back to [navy].
+enum AppColor {
+  system(Color(0xFF1F3A5F)),
+  navy(Color(0xFF1F3A5F)),
+  teal(Color(0xFF00696B)),
+  emerald(Color(0xFF1B6B45)),
+  maroon(Color(0xFF8E1B3A)),
+  graphite(Color(0xFF4A5560));
+
+  const AppColor(this.seed);
+
+  final Color seed;
+}
+
 @immutable
 class AppSettings {
   final BusinessProfile profile;
   final QuoteStyle quoteStyle;
   final ThemeMode themeMode;
+  final AppColor appColor;
 
   /// Whether we already asked the user to add their business name.
   final bool profilePrompted;
@@ -171,6 +191,7 @@ class AppSettings {
     this.profile = const BusinessProfile(),
     this.quoteStyle = const QuoteStyle(),
     this.themeMode = ThemeMode.system,
+    this.appColor = AppColor.system,
     this.profilePrompted = false,
   });
 
@@ -178,12 +199,14 @@ class AppSettings {
     BusinessProfile? profile,
     QuoteStyle? quoteStyle,
     ThemeMode? themeMode,
+    AppColor? appColor,
     bool? profilePrompted,
   }) =>
       AppSettings(
         profile: profile ?? this.profile,
         quoteStyle: quoteStyle ?? this.quoteStyle,
         themeMode: themeMode ?? this.themeMode,
+        appColor: appColor ?? this.appColor,
         profilePrompted: profilePrompted ?? this.profilePrompted,
       );
 
@@ -192,6 +215,7 @@ class AppSettings {
         'profile': profile.toMap(),
         'quoteStyle': quoteStyle.toMap(),
         'themeMode': themeMode.name,
+        'appColor': appColor.name,
         'profilePrompted': profilePrompted,
       };
 
@@ -204,6 +228,7 @@ class AppSettings {
       quoteStyle: QuoteStyle.fromMap(nested('quoteStyle')),
       themeMode:
           ThemeMode.values.asNameMap()[map['themeMode']] ?? ThemeMode.system,
+      appColor: AppColor.values.asNameMap()[map['appColor']] ?? AppColor.system,
       profilePrompted: map['profilePrompted'] as bool? ?? false,
     );
   }

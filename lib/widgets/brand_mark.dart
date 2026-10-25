@@ -1,18 +1,29 @@
+import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:costing_master/theme/app_theme.dart';
 import 'package:costing_master/theme/motion.dart';
 import 'package:flutter/material.dart';
 
-/// The app's Gujarati monogram: a gold-edged plum diamond carrying "કો".
+/// The logo keeps its own gold whatever app theme is chosen.
+const brandGold = Color(0xFFC9A227);
+
+/// The app's Gujarati monogram: a gold-edged, rounded diamond carrying "કો",
+/// filled with the theme's hero colours.
 ///
-/// Drawn in code so it stays crisp at any size and costs no asset bytes.
-/// With [animate], the gold edge traces itself and the letters fade in.
+/// Drawn in code so it stays crisp at any size and costs no asset bytes; the
+/// launcher icons are rendered from it too (see `tool/render_icons_test.dart`).
+/// With [animate], the mark pops in, its edge traces itself, the letters
+/// rise and a light sweeps across, in under a second.
 class BrandMark extends StatefulWidget {
   final double size;
   final bool animate;
 
   const BrandMark({super.key, this.size = 96, this.animate = false});
+
+  /// Length of the [animate] sequence.
+  static const animationDuration = Duration(milliseconds: 900);
 
   @override
   State<BrandMark> createState() => _BrandMarkState();
@@ -22,7 +33,7 @@ class _BrandMarkState extends State<BrandMark>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1100),
+    duration: BrandMark.animationDuration,
     value: widget.animate ? 0 : 1,
   );
 
@@ -52,9 +63,9 @@ class _BrandMarkState extends State<BrandMark>
         child: AnimatedBuilder(
           animation: _controller,
           builder: (context, _) => CustomPaint(
-            painter: _BrandMarkPainter(
+            painter: BrandMarkPainter(
               progress: _controller.value,
-              gold: AppTheme.gold,
+              fill: context.brand,
               fontFamily: Theme.of(context).textTheme.titleLarge?.fontFamily,
             ),
           ),
@@ -64,104 +75,172 @@ class _BrandMarkState extends State<BrandMark>
   }
 }
 
-class _BrandMarkPainter extends CustomPainter {
+/// Paints the brand mark at animation [progress] (1 is the finished mark).
+///
+/// With [fill] null it draws only the outline and letters in [gold]: the
+/// one-colour layer Android tints for themed launcher icons.
+class BrandMarkPainter extends CustomPainter {
   final double progress;
   final Color gold;
+  final BrandColors? fill;
   final String? fontFamily;
 
-  _BrandMarkPainter({
-    required this.progress,
-    required this.gold,
-    required this.fontFamily,
+  const BrandMarkPainter({
+    this.progress = 1,
+    this.gold = brandGold,
+    required this.fill,
+    this.fontFamily,
   });
 
-  static const _plumDeep = Color(0xFF3A1460);
-  static const _plumBright = Color(0xFF7B3FB0);
+  /// [progress] within the part of the timeline from [begin] to [end].
+  double _phase(double begin, double end, Curve curve) =>
+      curve.transform(((progress - begin) / (end - begin)).clamp(0.0, 1.0));
 
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.shortestSide;
-    final c = Offset(size.width / 2, size.height / 2);
-    final r = s * 0.48;
+    final c = size.center(Offset.zero);
+    final fill = this.fill;
 
-    Path rhombus(double radius) => Path()
-      ..moveTo(c.dx, c.dy - radius)
-      ..lineTo(c.dx + radius, c.dy)
-      ..lineTo(c.dx, c.dy + radius)
-      ..lineTo(c.dx - radius, c.dy)
-      ..close();
+    // Pops in slightly larger than its final size and settles.
+    final pop = _phase(0, 0.45, Curves.easeOutBack);
+    final scale = 0.85 + 0.15 * pop;
+    canvas
+      ..save()
+      ..translate(c.dx, c.dy)
+      ..scale(scale)
+      ..translate(-c.dx, -c.dy);
 
-    final fillIn = Curves.easeOut.transform((progress / 0.35).clamp(0, 1));
-    final outer = rhombus(r);
-    canvas.drawPath(
-      outer,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          Offset(c.dx - r, c.dy - r),
-          Offset(c.dx + r, c.dy + r),
-          [
-            _plumBright.withValues(alpha: fillIn),
-            _plumDeep.withValues(alpha: fillIn),
-          ],
-        ),
-    );
+    final outer = _roundedDiamond(c, s * 0.47, s * 0.09);
+    if (fill != null) {
+      final fillIn = _phase(0, 0.3, Curves.easeOut);
+      canvas.drawPath(
+        outer,
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset(c.dx - s / 2, c.dy - s / 2),
+            Offset(c.dx + s / 2, c.dy + s / 2),
+            [
+              fill.heroEnd.withValues(alpha: fillIn),
+              fill.heroStart.withValues(alpha: fillIn),
+            ],
+          ),
+      );
+      // A soft highlight on the upper half, like light on a cut stone.
+      canvas.drawPath(
+        outer,
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset(c.dx, c.dy - s / 2),
+            c,
+            [
+              Colors.white.withValues(alpha: 0.16 * fillIn),
+              Colors.white.withValues(alpha: 0),
+            ],
+          ),
+      );
+    }
 
-    // Gold edge traces itself around the diamond.
-    final trace =
-        Curves.easeInOutCubic.transform(((progress - 0.1) / 0.6).clamp(0, 1));
+    // The gold edge traces itself around the diamond.
+    final trace = _phase(0.1, 0.65, Curves.easeInOutCubic);
     final edge = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = s * 0.035
+      ..strokeWidth = s * 0.04
       ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round
       ..color = gold;
     if (trace >= 1) {
-      // A closed path gets a proper join at the top corner.
       canvas.drawPath(outer, edge);
-    } else {
+    } else if (trace > 0) {
       for (final metric in outer.computeMetrics()) {
         canvas.drawPath(metric.extractPath(0, metric.length * trace), edge);
       }
     }
 
-    // Faint inner facet.
+    // Inner facet.
     canvas.drawPath(
-      rhombus(r * 0.78),
+      _roundedDiamond(c, s * 0.37, s * 0.06),
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = s * 0.012
-        ..color = gold.withValues(alpha: 0.35 * trace),
+        ..strokeWidth = s * 0.014
+        ..color = gold.withValues(alpha: (fill == null ? 1 : 0.5) * trace),
     );
 
     // "કો" fades and rises into place.
-    final letters =
-        Curves.easeOut.transform(((progress - 0.55) / 0.45).clamp(0, 1));
-    if (letters == 0) return;
-    final painter = TextPainter(
-      text: TextSpan(
-        text: 'કો',
-        style: TextStyle(
-          fontSize: s * 0.36,
-          fontWeight: FontWeight.w800,
-          fontFamily: fontFamily,
-          color: gold.withValues(alpha: letters),
-          height: 1,
+    final letters = _phase(0.5, 0.85, Curves.easeOut);
+    if (letters > 0) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: 'કો',
+          style: TextStyle(
+            fontSize: s * 0.4,
+            fontWeight: FontWeight.w800,
+            fontFamily: fontFamily,
+            color: gold.withValues(alpha: letters),
+            height: 1,
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    painter.paint(
-      canvas,
-      Offset(
-        c.dx - painter.width / 2,
-        c.dy - painter.height / 2 + s * 0.02 + (1 - letters) * s * 0.06,
-      ),
-    );
+        textDirection: TextDirection.ltr,
+      )..layout();
+      painter.paint(
+        canvas,
+        Offset(
+          c.dx - painter.width / 2,
+          c.dy - painter.height / 2 + s * 0.02 + (1 - letters) * s * 0.05,
+        ),
+      );
+      painter.dispose();
+    }
+
+    // One light sweep across the finished mark.
+    final sweep = _phase(0.7, 1, Curves.easeInOut);
+    if (fill != null && sweep > 0 && sweep < 1) {
+      final x = c.dx - s + sweep * s * 2;
+      canvas
+        ..save()
+        ..clipPath(outer)
+        ..drawRect(
+          Offset.zero & size,
+          Paint()
+            ..shader = ui.Gradient.linear(
+              Offset(x - s * 0.25, c.dy - s * 0.25),
+              Offset(x + s * 0.25, c.dy + s * 0.25),
+              [
+                Colors.white.withValues(alpha: 0),
+                Colors.white.withValues(alpha: 0.35),
+                Colors.white.withValues(alpha: 0),
+              ],
+              const [0, 0.5, 1],
+            ),
+        )
+        ..restore();
+    }
+    canvas.restore();
+  }
+
+  /// A square with rounded corners standing on one corner, reaching
+  /// [halfDiagonal] from [c] (less the rounding) in each direction.
+  static Path _roundedDiamond(Offset c, double halfDiagonal, double radius) {
+    final side = halfDiagonal * math.sqrt2;
+    final square = Path()
+      ..addRRect(RRect.fromRectAndRadius(
+          Rect.fromCenter(center: c, width: side, height: side),
+          Radius.circular(radius)));
+    // Rotate 45° about the centre (column-major 4x4 matrix).
+    const k = math.sqrt1_2;
+    return square.transform(Float64List.fromList([
+      k, k, 0, 0, //
+      -k, k, 0, 0, //
+      0, 0, 1, 0, //
+      c.dx - k * c.dx + k * c.dy, c.dy - k * c.dx - k * c.dy, 0, 1,
+    ]));
   }
 
   @override
-  bool shouldRepaint(_BrandMarkPainter old) =>
+  bool shouldRepaint(BrandMarkPainter old) =>
       old.progress != progress ||
       old.gold != gold ||
+      old.fill != fill ||
       old.fontFamily != fontFamily;
 }
 
@@ -174,7 +253,7 @@ class BrandWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = color ?? context.colors.onSurface;
+    final fg = color ?? Theme.of(context).colorScheme.onSurface;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

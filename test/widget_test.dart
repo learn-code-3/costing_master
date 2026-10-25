@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Widget _app(Widget home) => ProviderScope(
-      child: MaterialApp(theme: AppTheme.light(), home: home),
+      child: MaterialApp(theme: AppTheme.light(AppColor.navy), home: home),
     );
 
 Costing _costing() => Costing(
@@ -56,8 +56,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('₹0.00'), findsWidgets);
 
-    final sheetField = find.widgetWithText(
-        TextField, Labels.fixedCharges.values.first.gu);
+    final sheetField =
+        find.widgetWithText(TextField, Labels.fixedCharges.values.first.gu);
     await tester.scrollUntilVisible(
       sheetField,
       200,
